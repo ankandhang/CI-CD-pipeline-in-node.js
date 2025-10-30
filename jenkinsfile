@@ -1,0 +1,50 @@
+pipeline {
+    agent any
+
+    environment {
+        DOCKER_IMAGE = "nodejs-ci-cd-app"
+        DOCKERHUB_USER = "your-dockerhub-username"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/your-username/your-repo.git'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo 'Building Docker image...'
+                sh 'docker build -t $DOCKER_IMAGE .'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                echo 'Running basic test...'
+                sh 'docker run --rm $DOCKER_IMAGE echo "App build successful"'
+            }
+        }
+
+        stage('Push to DockerHub') {
+            steps {
+                echo 'Pushing image to DockerHub...'
+                withCredentials([string(credentialsId: 'dockerhub-pass', variable: 'DOCKERHUB_PASS')]) {
+                    sh "echo $DOCKERHUB_PASS | docker login -u $DOCKERHUB_USER --password-stdin"
+                    sh "docker tag $DOCKER_IMAGE $DOCKERHUB_USER/$DOCKER_IMAGE:latest"
+                    sh "docker push $DOCKERHUB_USER/$DOCKER_IMAGE:latest"
+                }
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                echo 'Deploying container...'
+                sh 'docker stop nodejs-app || true'
+                sh 'docker rm nodejs-app || true'
+                sh 'docker run -d -p 5000:5000 --name nodejs-app $DOCKERHUB_USER/$DOCKER_IMAGE:latest'
+            }
+        }
+    }
+}
